@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DocuMind RAG</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #f7f6f2;
+    --card: #ffffff;
+    --accent: #1a1a2e;
+    --teal: #0f6e56;
+    --teal-light: #e1f5ee;
+    --border: #e2e0d8;
+    --text: #1a1a1a;
+    --muted: #888780;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; display: flex; flex-direction: column; }
+  header { background: var(--accent); padding: 1rem 2rem; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-family: 'DM Serif Display', serif; color: #fff; font-size: 1.4rem; font-weight: 400; letter-spacing: 0.02em; }
+  header .badge { background: var(--teal); color: #fff; font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 99px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .container { max-width: 760px; margin: 2rem auto; padding: 0 1.5rem; flex: 1; width: 100%; }
+  .subtitle { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; line-height: 1.6; }
+  .subtitle strong { color: var(--text); font-weight: 500; }
+  .chat-box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; margin-bottom: 1rem; }
+  .messages { padding: 1.25rem; display: flex; flex-direction: column; gap: 1rem; min-height: 300px; max-height: 420px; overflow-y: auto; }
+  .msg { display: flex; gap: 10px; align-items: flex-start; }
+  .msg-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; margin-top: 2px; }
+  .msg.user .msg-icon { background: var(--accent); color: #fff; }
+  .msg.bot  .msg-icon { background: var(--teal-light); color: var(--teal); }
+  .msg-text { font-size: 13.5px; line-height: 1.65; padding: 8px 12px; border-radius: 8px; max-width: 90%; }
+  .msg.user .msg-text { background: #f0eff9; color: var(--text); }
+  .msg.bot  .msg-text { background: var(--teal-light); color: #0a4033; }
+  .msg.bot.loading .msg-text { color: var(--muted); font-style: italic; }
+  .input-row { display: flex; gap: 8px; padding: 0.9rem 1.25rem; border-top: 1px solid var(--border); background: #fafaf8; }
+  input[type=text] { flex: 1; border: 1px solid var(--border); border-radius: 8px; padding: 9px 14px; font-size: 13.5px; font-family: 'DM Sans', sans-serif; background: #fff; color: var(--text); outline: none; }
+  input[type=text]:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(15,110,86,0.1); }
+  button { background: var(--teal); color: #fff; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: opacity 0.15s; }
+  button:hover { opacity: 0.88; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 1.25rem; }
+  .chip { font-size: 12px; padding: 5px 12px; border: 1px solid var(--border); border-radius: 99px; cursor: pointer; color: var(--muted); background: var(--card); transition: all 0.15s; }
+  .chip:hover { border-color: var(--teal); color: var(--teal); background: var(--teal-light); }
+  .stack { font-size: 11.5px; color: var(--muted); margin-top: 0.5rem; }
+  .stack span { background: #f0eff9; color: #534ab7; padding: 2px 7px; border-radius: 4px; margin-right: 4px; font-size: 11px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>DocuMind</h1>
+  <span class="badge">RAG · LangChain</span>
+</header>
+<div class="container">
+  <p class="subtitle">A <strong>Retrieval-Augmented Generation</strong> system built with LangChain, FAISS vector store, and Groq LLM. Ask anything about the B2B marketplace knowledge base.</p>
+  <p class="chips" id="chips"></p>
+  <div class="chat-box">
+    <div class="messages" id="messages">
+      <div class="msg bot">
+        <div class="msg-icon">AI</div>
+        <div class="msg-text">Hello! I'm DocuMind. I can answer questions about the B2B marketplace knowledge base using RAG — I retrieve relevant document chunks, then generate accurate answers grounded in that context. Ask me anything!</div>
+      </div>
+    </div>
+    <div class="input-row">
+      <input type="text" id="input" placeholder="Ask a question about the knowledge base…" />
+      <button id="sendBtn" onclick="sendMsg()">Ask</button>
+    </div>
+  </div>
+  <p class="stack">Tech stack: <span>LangChain</span><span>FAISS</span><span>HuggingFace Embeddings</span><span>Groq LLM</span><span>Flask</span><span>Python</span></p>
+</div>
+<script>
+const samples = [
+  "What is TrustSEAL?",
+  "How many suppliers does IndiaMART have?",
+  "What is the Payment Protection Plan?",
+  "How do buyers contact multiple suppliers?",
+  "When was IndiaMART founded?"
+];
+const chipsEl = document.getElementById('chips');
+samples.forEach(q => {
+  const c = document.createElement('span');
+  c.className = 'chip';
+  c.textContent = q;
+  c.onclick = () => { document.getElementById('input').value = q; sendMsg(); };
+  chipsEl.appendChild(c);
+});
+
+const input   = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const msgs    = document.getElementById('messages');
+
+input.addEventListener('keydown', e => { if (e.key === 'Enter') sendMsg(); });
+
+function addMsg(role, text, loading=false) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}${loading ? ' loading' : ''}`;
+  div.innerHTML = `<div class="msg-icon">${role === 'user' ? 'U' : 'AI'}</div><div class="msg-text">${text}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+async function sendMsg() {
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  sendBtn.disabled = true;
+  addMsg('user', q);
+  const loader = addMsg('bot', 'Retrieving relevant chunks and generating answer…', true);
+  try {
+    const res  = await fetch('/ask', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({question: q}) });
+    const data = await res.json();
+    loader.remove();
+    addMsg('bot', data.answer || data.error || 'No response.');
+  } catch(e) {
+    loader.remove();
+    addMsg('bot', 'Error connecting to server. Make sure the Flask backend is running.');
+  }
+  sendBtn.disabled = false;
+  input.focus();
+}
+</script>
+</body>
+</html>
