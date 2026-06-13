@@ -5,7 +5,7 @@ from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain_groq import ChatGroq
-import os, json, tempfile
+import os, json, tempfile, re
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -35,18 +35,29 @@ The platform uses AI-powered lead matching to connect the right buyers with rele
 IndiaMART's Imprego product helps suppliers manage their business operations digitally.
 """
 
+CHUNK_SIZE    = int(os.environ.get("CHUNK_SIZE", 200))
+CHUNK_OVERLAP = int(os.environ.get("CHUNK_OVERLAP", 30))
+RETRIEVAL_K   = int(os.environ.get("RETRIEVAL_K", 3))
+
+def clean_text(text):
+    text = text.strip()
+    text = re.sub(r'\n+', '\n', text)        # collapse multiple newlines
+    text = re.sub(r'[ \t]+', ' ', text)      # collapse multiple spaces
+    text = re.sub(r'[^\x00-\x7F]+', '', text) # remove non-ASCII characters
+    return text
+
 # ── Build vector store on startup ─────────────────────────────────────────
 _kb_file = os.path.join(tempfile.gettempdir(), "kb.txt")
 with open(_kb_file, "w") as f:
-    f.write(KB)
+    f.write(clean_text(KB))
 
 loader = TextLoader(_kb_file)
 docs   = loader.load()
-splitter = RecursiveCharacterTextSplitter(chunk_size=200, chunk_overlap=30)
+splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
 chunks = splitter.split_documents(docs)
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 vectorstore = FAISS.from_documents(chunks, embeddings)
-retriever   = vectorstore.as_retriever(search_kwargs={"k": 3})
+retriever   = vectorstore.as_retriever(search_kwargs={"k": RETRIEVAL_K})
 
 _qa_chain = None
 
